@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-# Removido: from fastapi.responses import HTMLResponse (se não for mais usado em nenhum outro lugar)
-# Removido: from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles # Mantido para servir CSS, JS, imagens
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -23,7 +23,7 @@ from backend.moderation import analisar_comentario
 app = FastAPI(
     title="Sistema de Comentários API",
     description="API para gerenciar usuários e comentários com moderação por IA.",
-    version="1.3.0" # Versão atualizada
+    version="1.5.0" # Versão atualizada
 )
 
 # --- CORS Middleware ---
@@ -36,37 +36,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Static Files ---
-# Define o diretório base do projeto para construir os caminhos corretamente
+# --- Templates and Static Files ---
 BASE_DIR = Path(__file__).resolve().parent.parent
-# Monta o diretório de arquivos estáticos (CSS, JS, imagens de usuário)
-# Isso ainda é importante para que o frontend (mesmo servido separadamente)
-# possa acessar /static/style.css, /static/user_images/, etc.
+templates = Jinja2Templates(directory=str(BASE_DIR / "frontend/templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "frontend/static")), name="static")
 
-# Diretório para salvar imagens de perfil enviadas pelos usuários
 USER_IMAGE_DIR = BASE_DIR / "frontend/static/user_images"
 USER_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-# REMOVIDO: Configuração do Jinja2Templates, pois não estamos mais servindo HTML diretamente
-# templates = Jinja2Templates(directory=str(BASE_DIR / "frontend/templates"))
+
+# --- HTML Page Endpoints (Servidos, mas ocultos do Swagger) ---
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False) # Oculta do Swagger
+async def read_index(request: Request):
+    """Serve a página principal de comentários."""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/loginpage", response_class=HTMLResponse, include_in_schema=False) # Oculta do Swagger
+async def read_login_page(request: Request):
+    """Serve a página de login."""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/registerpage", response_class=HTMLResponse, include_in_schema=False) # Oculta do Swagger
+async def read_register_page(request: Request):
+    """Serve a página de cadastro."""
+    return templates.TemplateResponse("cadastro.html", {"request": request})
 
 
-# --- HTML Page Endpoints (REMOVIDOS) ---
-# @app.get("/", response_class=HTMLResponse, tags=["Frontend Pages"])
-# async def read_index(request: Request):
-#     return templates.TemplateResponse("index.html", {"request": request})
-
-# @app.get("/loginpage", response_class=HTMLResponse, tags=["Frontend Pages"])
-# async def read_login_page(request: Request):
-#     return templates.TemplateResponse("login.html", {"request": request})
-
-# @app.get("/registerpage", response_class=HTMLResponse, tags=["Frontend Pages"])
-# async def read_register_page(request: Request):
-#     return templates.TemplateResponse("cadastro.html", {"request": request})
-
-
-# --- API Endpoints (Estes permanecem) ---
+# --- API Endpoints (Estes permanecem visíveis no Swagger) ---
 
 @app.post("/api/v1/register", response_model=UserOutput, tags=["User Management"], summary="Registrar Novo Usuário com Upload de Imagem Opcional")
 async def register_user(
