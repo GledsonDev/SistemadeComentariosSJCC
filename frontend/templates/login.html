@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Sistema de Comentários</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+    <div class="container auth-container">
+        <h1>Entrar</h1>
+        <div id="login-form">
+            <input type="text" id="nome" placeholder="Nome de usuário" required>
+            <input type="password" id="senha" placeholder="Senha" required>
+            <button onclick="handleLogin()">Entrar</button>
+            <p id="error-message" class="error-text"></p>
+        </div>
+        <p>Não tem uma conta? <a href="/registerpage">Cadastre-se aqui</a></p>
+        <p><a href="/">Voltar para comentários</a></p>
+    </div>
+
+    <script>
+        async function handleLogin() {
+            const nome = document.getElementById('nome').value;
+            const senha = document.getElementById('senha').value;
+            const errorMessageElement = document.getElementById('error-message');
+            errorMessageElement.textContent = '';
+
+            if (!nome || !senha) {
+                errorMessageElement.textContent = 'Por favor, preencha todos os campos.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nome, senha })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Falha no login.');
+                }
+
+                const userData = await response.json();
+                localStorage.setItem('comentarioUser', JSON.stringify(userData)); // Store user info
+                window.location.href = '/'; // Redirect to main comments page
+
+            } catch (error) {
+                errorMessageElement.textContent = error.message;
+                console.error('Erro no login:', error);
+            }
+        }
+    </script>
+</body>
+</html>

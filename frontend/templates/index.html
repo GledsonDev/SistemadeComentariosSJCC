@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Comentários Moderno</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <style>
+        /* Estilo para esconder a imagem se não houver src, ou para placeholders */
+        .profile-pic[src=""], .profile-pic-small[src=""] {
+            display: none; /* Esconde a tag img se o src estiver vazio */
+        }
+        .profile-pic.no-image, .profile-pic-small.no-image {
+            /* Alternativa: Mostrar um placeholder de background */
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            /* Certifique-se de que as dimensões (width, height) estão definidas no CSS principal */
+            /* Para exibir iniciais, você precisaria de mais JS */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <h1>💬 Mural de Comentários</h1>
+            <div id="user-greeting" class="user-info"></div>
+        </header>
+
+        <div id="auth-links" style="display:none;"> 
+            <a href="/loginpage" class="auth-button">Entrar</a>
+            <a href="/registerpage" class="auth-button">Cadastrar</a>
+        </div>
+
+        <div id="comment-form-area" style="display:none;">
+            <h2>Deixe seu comentário:</h2>
+            <textarea id="comment-text" placeholder="Escreva algo construtivo..."></textarea>
+            <button onclick="submitNewComment()" class="submit-button">Enviar Comentário</button>
+            <p id="comment-error" class="error-text"></p>
+            <p id="comment-success" class="success-text"></p>
+        </div>
+        
+        <hr class="separator">
+
+        <h2>Comentários Recentes:</h2>
+        <div id="comments-list">
+            <p>Carregando comentários...</p>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        // REMOVIDO: const DEFAULT_PROFILE_IMAGE_FRONTEND = "{{ url_for('static', path='default_avatar.png') }}";
+
+        function createUserImageElement(imageUrl, altText, className) {
+            if (imageUrl) {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = altText;
+                img.className = className;
+                img.onerror = function() { // Opcional: se a URL existir mas quebrar
+                    this.style.display = 'none'; // ou this.src = 'caminho_para_uma_imagem_quebrada_generica.png';
+                };
+                return img;
+            }
+            // Se não houver imageUrl, retorna null ou um elemento placeholder (se desejado)
+            // Por enquanto, retornamos null e o HTML não adicionará a tag img.
+            // Ou, para um placeholder CSS:
+            // const placeholder = document.createElement('div');
+            // placeholder.className = className + ' no-image'; // Adiciona classe para estilização
+            // return placeholder;
+            return null;
+        }
+
+        function checkLoginStatus() {
+            const userDataString = localStorage.getItem('comentarioUser');
+            const userGreetingDiv = document.getElementById('user-greeting');
+            const authLinksDiv = document.getElementById('auth-links');
+            const commentFormArea = document.getElementById('comment-form-area');
+
+            userGreetingDiv.innerHTML = ''; // Limpa antes de preencher
+
+            if (userDataString) {
+                currentUser = JSON.parse(userDataString);
+                
+                let greetingHTML = `<span>Olá, <strong>${currentUser.nome}</strong>!</span>`;
+                const userImgElement = createUserImageElement(currentUser.imagem, "Perfil", "profile-pic-small");
+                if (userImgElement) {
+                    greetingHTML += userImgElement.outerHTML;
+                }
+                greetingHTML += `<button onclick="logout()" class="logout-button">Sair</button>`;
+                userGreetingDiv.innerHTML = greetingHTML;
+                
+                authLinksDiv.style.display = 'none';
+                commentFormArea.style.display = 'block';
+            } else {
+                currentUser = null;
+                authLinksDiv.style.display = 'flex';
+                commentFormArea.style.display = 'none';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('comentarioUser');
+            currentUser = null;
+            checkLoginStatus(); 
+        }
+
+        async function loadComments() {
+            const commentsListDiv = document.getElementById('comments-list');
+            commentsListDiv.innerHTML = '<p>Carregando comentários...</p>'; // Mostra feedback imediato
+            try {
+                const response = await fetch('/api/v1/comments'); 
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => null); // Tenta pegar o JSON do erro
+                    throw new Error(errorData?.detail || `Falha ao carregar comentários. Status: ${response.status}`);
+                }
+                
+                const comments = await response.json();
+                commentsListDiv.innerHTML = ''; 
+
+                if (comments.length === 0) {
+                    commentsListDiv.innerHTML = '<p>Ainda não há comentários aprovados. Seja o primeiro a comentar (após o login)!</p>';
+                    return;
+                }
+
+                comments.forEach(comment => {
+                    const commentDiv = document.createElement('div');
+                    commentDiv.className = 'comment-item';
+                    
+                    let commentHTML = '';
+                    const commentImgElement = createUserImageElement(comment.imagem, comment.nome, "profile-pic");
+                    if (commentImgElement) {
+                        commentHTML += commentImgElement.outerHTML;
+                    } else {
+                        // Se não houver imagem, pode adicionar um placeholder DIV com iniciais ou um ícone via CSS
+                        // Ex: commentHTML += `<div class="profile-pic no-image"></div>`;
+                    }
+                    
+                    commentHTML += `
+                        <div class="comment-content">
+                            <strong>${escapeHTML(comment.nome)}</strong>
+                            <p>${escapeHTML(comment.texto)}</p>
+                        </div>
+                    `;
+                    commentDiv.innerHTML = commentHTML;
+                    commentsListDiv.appendChild(commentDiv);
+                });
+            } catch (error) {
+                commentsListDiv.innerHTML = `<p class="error-text">Erro ao carregar comentários: ${error.message}</p>`;
+                console.error('Erro ao carregar comentários:', error);
+            }
+        }
+
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return str.replace(/[&<>"']/g, function (match) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[match];
+            });
+        }
+
+        async function submitNewComment() {
+            const commentText = document.getElementById('comment-text').value;
+            const commentErrorElement = document.getElementById('comment-error');
+            const commentSuccessElement = document.getElementById('comment-success');
+            commentErrorElement.textContent = '';
+            commentSuccessElement.textContent = '';
+
+            if (!currentUser) {
+                commentErrorElement.textContent = 'Você precisa estar logado para comentar.';
+                return;
+            }
+            if (!commentText.trim()) {
+                commentErrorElement.textContent = 'O comentário não pode estar vazio.';
+                return;
+            }
+
+            try {
+                // currentUser.imagem pode ser null, e será enviado como null no JSON
+                const response = await fetch('/api/v1/comments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nome: currentUser.nome,
+                        imagem: currentUser.imagem, // Pode ser null
+                        texto: commentText
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Falha ao enviar comentário.');
+                }
+                
+                document.getElementById('comment-text').value = ''; 
+                if (result.aprovado) {
+                    commentSuccessElement.textContent = 'Comentário enviado e aprovado!';
+                    loadComments(); 
+                } else {
+                    commentSuccessElement.textContent = 'Comentário enviado e aguardando moderação (ou não foi aprovado).';
+                }
+                setTimeout(() => { commentSuccessElement.textContent = ''; }, 5000);
+
+            } catch (error) {
+                commentErrorElement.textContent = error.message;
+                console.error('Erro ao enviar comentário:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkLoginStatus(); 
+            loadComments();     
+        });
+    </script>
+</body>
+</html>

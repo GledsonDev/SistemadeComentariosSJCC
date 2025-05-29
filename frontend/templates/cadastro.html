@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro - Sistema de Comentários</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+    <div class="container auth-container">
+        <h1>Cadastrar</h1>
+        <div id="register-form-fields">
+            <input type="text" id="nome" placeholder="Nome de usuário" required>
+            <input type="password" id="senha" placeholder="Senha" required>
+            
+            <label for="imagem-upload" class="file-upload-label">
+                Foto de Perfil (Opcional):
+            </label>
+            <input type="file" id="imagem-upload" name="imagem" accept="image/*">
+            <p class="input-hint">Se não enviar uma foto, uma imagem padrão será usada.</p>
+            
+            <button onclick="handleRegister()">Cadastrar</button>
+            <p id="success-message" class="success-text"></p>
+            <p id="error-message" class="error-text"></p>
+        </div>
+        <p>Já tem uma conta? <a href="/loginpage">Faça login aqui</a></p>
+        <p><a href="/">Voltar para comentários</a></p>
+    </div>
+
+    <script>
+        async function handleRegister() {
+            const nome = document.getElementById('nome').value;
+            const senha = document.getElementById('senha').value;
+            const imagemInput = document.getElementById('imagem-upload'); // ID atualizado
+            const imagemFile = imagemInput.files[0]; // Pega o arquivo
+
+            const successMessageElement = document.getElementById('success-message');
+            const errorMessageElement = document.getElementById('error-message');
+
+            successMessageElement.textContent = '';
+            errorMessageElement.textContent = '';
+
+            if (!nome || !senha) {
+                errorMessageElement.textContent = 'Nome de usuário e senha são obrigatórios.';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('nome', nome);
+            formData.append('senha', senha);
+            if (imagemFile) {
+                // Validar tipo de arquivo no frontend (básico)
+                if (!imagemFile.type.startsWith('image/')) {
+                    errorMessageElement.textContent = 'Por favor, selecione um arquivo de imagem válido.';
+                    return;
+                }
+                formData.append('imagem', imagemFile); // O backend espera 'imagem' como alias
+            }
+
+            try {
+                // Ao usar FormData, não defina o header 'Content-Type'.
+                // O navegador o fará automaticamente com o 'boundary' correto.
+                const response = await fetch('/api/v1/register', {
+                    method: 'POST',
+                    body: formData 
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Falha no cadastro.');
+                }
+
+                successMessageElement.textContent = 'Cadastro realizado com sucesso! Você pode fazer login agora.';
+                document.getElementById('nome').value = ''; // Limpar campos
+                document.getElementById('senha').value = '';
+                imagemInput.value = null; // Limpar input de arquivo
+
+            } catch (error) {
+                errorMessageElement.textContent = error.message;
+                console.error('Erro no cadastro:', error);
+            }
+        }
+    </script>
+</body>
+</html>

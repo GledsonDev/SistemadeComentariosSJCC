@@ -1,34 +1,304 @@
+/* General Reset & Base Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 body {
-    font-family: Arial, sans-serif;
-    background: #f4f4f4;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f2f5; /* Light grey background */
+    color: #333;
+    line-height: 1.6;
     padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Align to top for scroll */
+    min-height: 100vh;
 }
+
 .container {
-    background: white;
-    max-width: 600px;
-    margin: auto;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 0 10px #ccc;
-}
-textarea {
+    background: #ffffff; /* White container background */
+    max-width: 700px; /* Slightly wider for better comment display */
     width: 100%;
-    height: 80px;
-    padding: 10px;
+    margin: 20px auto;
+    padding: 30px;
+    border-radius: 12px; /* Softer rounded corners */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* More pronounced shadow */
 }
-button {
-    margin-top: 10px;
-    padding: 8px 16px;
+
+/* Header Styles */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e0e0e0;
 }
-.comentario {
-    margin-top: 15px;
-    padding: 10px;
-    border-bottom: 1px solid #ddd;
+
+.page-header h1 {
+    color: #1877f2; /* Facebook-like blue */
+    font-size: 28px;
 }
-.comentario img {
+
+.user-info {
+    display: flex;
+    align-items: center;
+    font-size: 0.95em;
+}
+
+.user-info strong {
+    color: #050505;
+}
+
+.profile-pic-small {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    vertical-align: middle;
-    margin-right: 8px;
+    margin-left: 10px;
+    margin-right: 10px;
+    object-fit: cover;
+    border: 1px solid #ddd;
+    background-color: #f0f2f5; /* Cor de fundo caso a imagem não carregue */
+}
+
+/* Auth Links & Buttons */
+#auth-links {
+    display: flex; /* Será alterado para 'none' ou 'flex' via JS */
+    gap: 10px; /* Space between buttons */
+    margin-bottom: 20px;
+    justify-content: flex-end; /* Align to the right */
+}
+
+.auth-button, button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.auth-button {
+    background-color: #e4e6eb;
+    color: #050505;
+    text-decoration: none;
+}
+.auth-button:hover {
+    background-color: #d8dbdf;
+}
+
+button.submit-button {
+    background-color: #1877f2; /* Blue */
+    color: white;
+    display: block; /* Faz o botão ocupar a largura disponível se necessário */
+    margin-top: 10px; /* Adiciona espaço acima do botão de enviar comentário */
+}
+button.submit-button:hover {
+    background-color: #166fe5; /* Darker blue */
+}
+
+button.logout-button {
+    background-color: #f0f2f5;
+    color: #050505;
+    font-size: 0.9em;
+    padding: 6px 12px;
+}
+button.logout-button:hover {
+    background-color: #d8dbdf;
+}
+
+
+/* Comment Form Area */
+#comment-form-area {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f9f9f9; /* Slightly different background for form area */
+    border-radius: 8px;
+    /* display: none; Será controlado por JS */
+}
+
+#comment-form-area h2 {
+    margin-bottom: 15px;
+    font-size: 1.3em;
+    color: #333;
+}
+
+textarea#comment-text {
+    width: 100%;
+    height: 100px; /* Increased height */
+    padding: 12px;
+    border: 1px solid #ccd0d5;
+    border-radius: 6px;
+    font-size: 1em;
+    margin-bottom: 10px;
+    resize: vertical; /* Allow vertical resize */
+}
+textarea#comment-text:focus {
+    outline: none;
+    border-color: #1877f2;
+    box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+/* Comments List */
+#comments-list h2 { /* Se você tiver um H2 dentro de comments-list */
+    margin-bottom: 20px;
+    font-size: 1.5em;
+    color: #333;
+}
+
+.comment-item {
+    display: flex;
+    align-items: flex-start; /* Align items to the top */
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #e0e0e0; /* Lighter border */
+    border-radius: 8px;
+    background-color: #fff; /* Ensure comment items are white */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.profile-pic {
+    width: 40px; /* Slightly larger profile pic */
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 15px; /* More space */
+    object-fit: cover; /* Ensures image covers the area without distortion */
+    background-color: #f0f2f5; /* Cor de fundo caso a imagem não carregue */
+}
+
+.comment-content strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #050505; /* Darker name for better readability */
+    font-weight: 600;
+}
+
+.comment-content p {
+    margin: 0;
+    font-size: 0.95em;
+    word-wrap: break-word; /* Ensure long words break */
+    white-space: pre-wrap; /* Preserva quebras de linha e espaços do comentário */
+}
+
+/* Separator */
+hr.separator {
+    border: 0;
+    height: 1px;
+    background: #e0e0e0;
+    margin: 30px 0;
+}
+
+/* Auth Page Specific Styles */
+.auth-container {
+    max-width: 400px; /* Smaller container for login/register */
+    text-align: center; /* Centraliza o texto dos <p> e <a> */
+}
+
+.auth-container h1 {
+    margin-bottom: 25px;
+    color: #1877f2;
+}
+
+.auth-container input[type="text"],
+.auth-container input[type="password"],
+.auth-container input[type="url"] /* Mantido caso queira reusar para outros URLs */ {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1em;
+}
+.auth-container input[type="text"]:focus,
+.auth-container input[type="password"]:focus,
+.auth-container input[type="url"]:focus {
+    outline: none;
+    border-color: #1877f2;
+    box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+
+.auth-container button {
+    width: 100%;
+    padding: 12px;
+    background-color: #1877f2;
+    color: white;
+    font-size: 1.1em;
+    margin-top: 10px; /* Adiciona espaço se houver algo acima como o input de arquivo */
+}
+.auth-container button:hover {
+    background-color: #166fe5;
+}
+
+.auth-container p {
+    margin-top: 20px;
+    font-size: 0.9em;
+}
+.auth-container a {
+    color: #1877f2;
+    text-decoration: none;
+}
+.auth-container a:hover {
+    text-decoration: underline;
+}
+
+/* Estilos para o formulário de cadastro com upload */
+.auth-container label.file-upload-label {
+    display: block;
+    text-align: left; /* Alinha o label à esquerda */
+    margin-top: 15px; /* Espaço acima do label */
+    margin-bottom: 5px; /* Espaço entre o label e o input */
+    font-weight: 500;
+    color: #555;
+}
+
+.auth-container input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 5px; 
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background-color: #fff; 
+    font-size: 0.9em;
+    line-height: 1.5; 
+}
+
+/* Estilizando o botão que o navegador renderiza para o input file */
+.auth-container input[type="file"]::file-selector-button {
+    padding: 8px 12px;
+    margin-right: 10px; /* Espaço entre o botão e o "nenhum arquivo selecionado" */
+    border: none;
+    border-radius: 4px;
+    background-color: #5c677d; /* Cor mais neutra para o botão interno */
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.auth-container input[type="file"]::file-selector-button:hover {
+    background-color: #4a5467;
+}
+
+.input-hint {
+    font-size: 0.8em;
+    color: #777;
+    text-align: left; /* Alinha a dica à esquerda */
+    margin-bottom: 15px; 
+}
+
+
+/* Utility Classes */
+.error-text {
+    color: #d93025; /* Google red for errors */
+    font-size: 0.9em;
+    margin-top: 5px;
+    text-align: left; /* Alinha mensagens de erro à esquerda */
+}
+.success-text {
+    color: #1e8e3e; /* Google green for success */
+    font-size: 0.9em;
+    margin-top: 5px;
+    text-align: left; /* Alinha mensagens de sucesso à esquerda */
 }
