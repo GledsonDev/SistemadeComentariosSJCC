@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Comentários</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Comentários</h1>
+        <div id="login-area">
+            <input type="text" id="nome" placeholder="Nome">
+            <input type="password" id="senha" placeholder="Senha">
+            <input type="text" id="imagem" placeholder="URL da imagem">
+            <button onclick="login()">Entrar</button>
+            <button onclick="cadastrar()">Cadastrar</button>
+        </div>
+        <div id="comentar-area" style="display:none;">
+            <textarea id="comentario" placeholder="Digite seu comentário..."></textarea>
+            <button onclick="enviarComentario()">Enviar</button>
+        </div>
+        <div id="comentarios"></div>
+    </div>
+    <script>
+        let usuario = null;
+
+        async function login() {
+            const nome = document.getElementById("nome").value;
+            const senha = document.getElementById("senha").value;
+            const imagem = document.getElementById("imagem").value;
+            try {
+                const r = await fetch("/login", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({nome, senha, imagem})
+                });
+                if (!r.ok) throw new Error();
+                usuario = await r.json();
+                document.getElementById("comentar-area").style.display = "block";
+            } catch {
+                alert("Falha no login.");
+            }
+        }
+
+        async function cadastrar() {
+            const nome = document.getElementById("nome").value;
+            const senha = document.getElementById("senha").value;
+            const imagem = document.getElementById("imagem").value;
+            try {
+                const r = await fetch("/cadastro", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({nome, senha, imagem})
+                });
+                if (!r.ok) throw new Error();
+                alert("Cadastro realizado.");
+            } catch {
+                alert("Erro no cadastro.");
+            }
+        }
+
+        async function enviarComentario() {
+            const texto = document.getElementById("comentario").value;
+            if (!usuario) {
+                alert("Faça login primeiro.");
+                return;
+            }
+            await fetch("/comentario", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    nome: usuario.nome,
+                    imagem: usuario.imagem,
+                    texto: texto
+                })
+            });
+            carregarComentarios();
+        }
+
+        async function carregarComentarios() {
+            const r = await fetch("/comentarios");
+            const dados = await r.json();
+            const area = document.getElementById("comentarios");
+            area.innerHTML = "";
+            for (const c of dados) {
+                area.innerHTML += `<div class="comentario"><img src="\${c.imagem}" alt="foto"><strong>\${c.nome}</strong><p>\${c.texto}</p></div>`;
+            }
+        }
+
+        carregarComentarios();
+    </script>
+</body>
+</html>
