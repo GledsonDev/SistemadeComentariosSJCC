@@ -38,8 +38,8 @@ from .security import (
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Sistema de Comentários API com JWT e PostgreSQL",
-    description="API para gerenciar usuários e comentários com moderação por IA, persistência em PostgreSQL e autenticação JWT.",
+    title="Sistema de Comentários SJCC",
+    description="API para gerenciar usuários e comentários com moderação por IA.",
     version="2.1.1" # Pequena atualização de versão
 )
 
