@@ -6,16 +6,21 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/styleIndex.css') }}">
     <style>
         /* Estilo adicional para placeholders de imagem */
-        .profile-pic[src=""], .profile-pic-small[src=""] {
-            background-color: #f0f2f5;
-            border: 1px solid #e0e0e0;
-        }
-        .profile-pic.img-placeholder, .profile-pic-small.img-placeholder { /* Renomeado para evitar conflito com [src=""] */
-            background-color: #e0e0e0;
+        .profile-pic.img-placeholder, 
+        .profile-pic-small.img-placeholder {
+            background-color: #e0e0e0; /* Cor de fundo para placeholder */
             border: 1px solid #ccc;
-            display: inline-block;
-            /* As dimensões (width, height, border-radius) devem vir do .profile-pic ou .profile-pic-small no CSS principal */
+            display: inline-block; 
+            /* As dimensões (width, height, border-radius) devem vir das classes CSS principais */
+            /* Ex: .profile-pic e .profile-pic-small já devem ter width, height, border-radius */
+            /* Para garantir que o placeholder tenha o mesmo tamanho: */
+            /* Se .profile-pic tem width: 50px, height: 50px; */
+            /* .profile-pic.img-placeholder { width: 50px; height: 50px; } */
         }
+        .profile-pic[src=""], .profile-pic-small[src=""] { /* Se o src estiver vazio por algum motivo */
+             display: none; /* Ou use a classe img-placeholder como fallback */
+        }
+
         /* Estilo para o botão de sair no cabeçalho */
         .user-info .logout-button { 
             padding: 6px 12px;
@@ -48,7 +53,8 @@
         <div id="comment-form-area" class="comment-form" style="display:none;">
             <h2>Deixe seu comentário:</h2>
             <textarea id="comment-text" placeholder="Escreva algo construtivo..."></textarea>
-            <button onclick="submitNewComment()" class="submit-button">Enviar Comentário</button> <p id="comment-error" class="error-text"></p>
+            <button onclick="submitNewComment()" class="submit-button">Enviar Comentário</button>
+            <p id="comment-error" class="error-text"></p>
             <p id="comment-success" class="success-text"></p>
         </div>
 
@@ -61,13 +67,15 @@
     </div>
 
     <script>
-        let currentUser = null;
+        let currentUser = null; // Armazenará o objeto user_info do localStorage
 
         function createUserImageElement(imageUrl, altText, className) {
             if (!imageUrl || imageUrl.trim() === "") {
                 const placeholder = document.createElement('div');
-                placeholder.className = className + ' img-placeholder'; 
-                return placeholder; 
+                placeholder.className = className + ' img-placeholder'; // Adiciona classe para placeholder
+                // Para garantir que o placeholder tenha as dimensões corretas:
+                // (Seu CSS para .profile-pic e .profile-pic-small já deve definir width/height/border-radius)
+                return placeholder;
             }
 
             const img = document.createElement('img');
@@ -86,18 +94,18 @@
         }
 
         function checkLoginStatus() {
-            const userDataString = localStorage.getItem('comentarioUser');
+            const userDataString = localStorage.getItem('comentarioUser'); // user_info é armazenado aqui
             const userGreetingDiv = document.getElementById('user-greeting');
             const authLinksDiv = document.getElementById('auth-links');
             const commentFormArea = document.getElementById('comment-form-area'); 
-            // Linha removida: const topCommentText = document.getElementById('top-comment-text');
 
             userGreetingDiv.innerHTML = ''; 
 
             if (userDataString) {
-                currentUser = JSON.parse(userDataString);
+                currentUser = JSON.parse(userDataString); // currentUser agora é o objeto user_info
                 
                 let greetingHTML = `<span>Olá, <strong>${escapeHTML(currentUser.nome)}</strong>!</span>`;
+                // currentUser.imagem deve existir se o UserOutput do backend o incluir
                 const userImgElement = createUserImageElement(currentUser.imagem, "Perfil", "profile-pic-small");
                 if (userImgElement) {
                     greetingHTML += userImgElement.outerHTML;
@@ -106,19 +114,17 @@
                 userGreetingDiv.innerHTML = greetingHTML;
                 
                 authLinksDiv.style.display = 'none';
-                commentFormArea.style.display = 'block'; // Mostra o formulário principal se logado
-                // Linhas removidas: manipulação de topCommentText.disabled e placeholder
-
+                commentFormArea.style.display = 'block';
             } else {
                 currentUser = null;
                 authLinksDiv.style.display = 'flex';
-                commentFormArea.style.display = 'none'; // Esconde o formulário principal se não logado
-                // Linhas removidas: manipulação de topCommentText.disabled e placeholder
+                commentFormArea.style.display = 'none';
             }
         }
 
         function logout() {
             localStorage.removeItem('comentarioUser');
+            localStorage.removeItem('accessToken'); // Importante: Limpar o token de acesso
             currentUser = null;
             checkLoginStatus(); 
         }
@@ -127,6 +133,7 @@
             const commentsListDiv = document.getElementById('comments-list');
             commentsListDiv.innerHTML = '<p>Carregando comentários...</p>';
             try {
+                // Este endpoint não requer autenticação para GET
                 const response = await fetch("{{ url_for('get_approved_comments_endpoint') }}"); 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ detail: `Falha ao carregar comentários. Status: ${response.status}` }));
@@ -149,9 +156,10 @@
                     commentDiv.className = 'comment-item';
                     
                     let commentHTML = '';
+                    // comment.autor_imagem vem do backend (ComentarioOutput)
                     const commentImgElement = createUserImageElement(comment.autor_imagem, comment.autor_nome, "profile-pic");
                     
-                    if (commentImgElement) {
+                    if (commentImgElement) { 
                         commentHTML += commentImgElement.outerHTML;
                     }
                     
@@ -179,8 +187,7 @@
             return str.replace(/[&<>"']/g, function(m) { return map[m]; });
         }
 
-        async function submitNewComment() { // Removido o parâmetro commentSource
-            // Agora sempre pega do formulário principal
+        async function submitNewComment() {
             const commentText = document.getElementById('comment-text').value;
             const successElement = document.getElementById('comment-success');
             const errorElement = document.getElementById('comment-error');   
@@ -189,40 +196,61 @@
             if (successElement) successElement.textContent = '';
 
             if (!currentUser) {
-                // Esta verificação pode ser redundante se o formulário só é visível quando logado,
-                // mas é uma boa prática manter.
                 alert('Você precisa estar logado para comentar.');
+                // Opcional: redirecionar para login se o formulário estiver visível por engano
+                // window.location.href = "{{ url_for('read_login_page') }}";
                 return;
             }
             if (!commentText.trim()) {
-                errorElement.textContent = 'O comentário não pode estar vazio.'; // Usa o elemento de erro do formulário
-                // alert('O comentário não pode estar vazio.'); // Alternativa com alert
+                if(errorElement) errorElement.textContent = 'O comentário não pode estar vazio.';
+                else alert('O comentário não pode estar vazio.');
+                return;
+            }
+
+            const accessToken = localStorage.getItem('accessToken');
+            if (!accessToken) {
+                alert('Sua sessão pode ter expirado. Por favor, faça login novamente.');
+                window.location.href = "{{ url_for('read_login_page') }}"; // Redireciona para login
                 return;
             }
 
             const formData = new FormData();
-            formData.append('nome_autor', currentUser.nome);
+            // Não precisamos mais enviar 'nome_autor' ou 'imagem_autor'
+            // O backend obtém o usuário autenticado a partir do token JWT.
             formData.append('texto', commentText); 
 
             try {
                 const response = await fetch("{{ url_for('submit_comment_endpoint') }}", {
                     method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}` // Envia o token JWT
+                    },
                     body: formData 
                 });
 
-                const result = await response.json();
-
                 if (!response.ok) {
-                    throw new Error(result.detail || 'Falha ao enviar comentário.');
+                    if (response.status === 401) { // Token inválido/expirado ou não autorizado
+                        alert('Sua sessão expirou ou você não está autorizado. Por favor, faça login novamente.');
+                        logout(); // Limpa dados de login
+                        window.location.href = "{{ url_for('read_login_page') }}";
+                        return; // Interrompe a execução
+                    }
+                    // Outros erros
+                    const errorData = await response.json().catch(() => ({detail: "Falha ao enviar o comentário."}));
+                    throw new Error(errorData.detail);
                 }
                 
-                document.getElementById('comment-text').value = ''; // Limpa o textarea do formulário
+                const result = await response.json(); // Mesmo se o status for 201, precisamos do corpo para 'aprovado'
+                
+                document.getElementById('comment-text').value = ''; 
                 
                 if (result.aprovado) {
                     if(successElement) successElement.textContent = 'Comentário enviado e aprovado!';
+                    else alert('Comentário enviado e aprovado!');
                     loadComments(); 
                 } else {
                     if(successElement) successElement.textContent = 'Comentário enviado e aguardando moderação (ou não foi aprovado).';
+                    else alert('Comentário enviado e aguardando moderação (ou não foi aprovado).');
                 }
                 if(successElement) {
                     setTimeout(() => { successElement.textContent = ''; }, 5000);
@@ -230,6 +258,7 @@
 
             } catch (error) {
                 if(errorElement) errorElement.textContent = error.message;
+                else alert(`Erro ao enviar comentário: ${error.message}`);
                 console.error('Erro ao enviar comentário:', error);
             }
         }
@@ -237,8 +266,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             checkLoginStatus(); 
             loadComments();     
-
-            // Bloco do event listener para topCommentTextArea foi REMOVIDO
+            // O event listener para o topCommentTextArea foi removido, pois o textarea foi removido.
         });
     </script>
 </body>

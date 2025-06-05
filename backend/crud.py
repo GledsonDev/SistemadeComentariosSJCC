@@ -1,8 +1,9 @@
+# backend/crud.py
 from sqlalchemy.orm import Session
-import hashlib
-from typing import Optional, List # <--- ADICIONE ESTA LINHA
-
-from . import models, schemas # models (SQLAlchemy), schemas (Pydantic)
+# Removido: import hashlib (não mais usado diretamente aqui)
+from typing import Optional, List 
+from . import models, schemas
+from .security import get_password_hash # Importar a nova função de hash
 
 # --- Funções CRUD para Usuários ---
 def get_user_by_id(db: Session, user_id: int) -> Optional[models.User]:
@@ -12,10 +13,11 @@ def get_user_by_nome(db: Session, nome: str) -> Optional[models.User]:
     return db.query(models.User).filter(models.User.nome == nome).first()
 
 def create_user(db: Session, user_input: schemas.UserCreateInput) -> models.User:
-    senha_hash_calculada = hashlib.sha256(user_input.senha.encode()).hexdigest()
+    # Usar a nova função de hash de security.py
+    hashed_password = get_password_hash(user_input.senha)
     db_user = models.User(
         nome=user_input.nome,
-        senha_hash=senha_hash_calculada,
+        senha_hash=hashed_password, # Salvar o hash gerado pelo passlib
         imagem=user_input.imagem
     )
     db.add(db_user)
@@ -23,13 +25,13 @@ def create_user(db: Session, user_input: schemas.UserCreateInput) -> models.User
     db.refresh(db_user)
     return db_user
 
-# --- Funções CRUD para Comentários ---
+# ... (resto das funções CRUD de Comentário permanecem iguais) ...
 def create_comment(db: Session, comentario_input: schemas.ComentarioCreateInput, autor_user: models.User, aprovado_status: bool) -> models.Comentario:
     db_comentario = models.Comentario(
         texto=comentario_input.texto,
         autor_id=autor_user.id,
         autor_nome=autor_user.nome,
-        autor_imagem=autor_user.imagem,
+        autor_imagem=autor_user.imagem, 
         aprovado=aprovado_status
     )
     db.add(db_comentario)

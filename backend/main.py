@@ -1,41 +1,102 @@
-from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, Request
+from fastapi import (
+    FastAPI, HTTPException, Depends, File, 
+    UploadFile, Form, Request, status
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
 from typing import List, Optional
-from sqlalchemy.orm import Session # Importar Session
-import hashlib
+from sqlalchemy.orm import Session
+from pydantic import BaseModel # Para TokenData
+from jose import JWTError, jwt
+from datetime import datetime, timedelta, timezone # Adicionado timezone
+
 import shutil
 import uuid
 from pathlib import Path
 import os
 
-# Novas importações do nosso projeto
-from . import crud, models, schemas # Nossos módulos CRUD, Models (SQLAlchemy), Schemas (Pydantic)
-from .database import engine, get_db # Nossa configuração de DB e dependência get_db. SessionLocal não é mais importada diretamente aqui.
-from .moderation import analisar_comentario # Moderação continua a mesma
+# Importações dos módulos do projeto
+from . import crud, models, schemas
+from .database import engine, get_db # get_db é a dependência da sessão do DB
+from .moderation import analisar_comentario
 
-# Cria todas as tabelas no banco de dados (se elas ainda não existirem)
-# Isso é executado quando o módulo main.py é carregado pela primeira vez.
+# Importações de security.py
+from .security import (
+    create_access_token,
+    verify_password,
+    ALGORITHM,
+    SECRET_KEY,
+    # pwd_context não é usado diretamente em main.py, mas em crud.py via security.py
+    ACCESS_TOKEN_EXPIRE_MINUTES # Importado para uso em login_for_access_token
+)
+
+# Cria tabelas no DB (se não existirem)
 models.Base.metadata.create_all(bind=engine)
 
-
 app = FastAPI(
-    title="Sistema de Comentários SJCC",
-    description="API para gerenciar usuários e comentários com moderação por IA.",
-    version="2.0.1" # Pequena atualização de versão
+    title="Sistema de Comentários API com JWT e PostgreSQL",
+    description="API para gerenciar usuários e comentários com moderação por IA, persistência em PostgreSQL e autenticação JWT.",
+    version="2.1.1" # Pequena atualização de versão
 )
 
 # --- CORS Middleware ---
-origins = ["*"]
+# Ajuste 'origins' para seus domínios de frontend em produção
+origins = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    # "https://seufrontend.com", 
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"], # Permite todos os métodos (GET, POST, etc.)
+    allow_headers=["*"], # Permite todos os headers (incluindo Authorization)
 )
+
+# --- OAuth2 e Token Data Schema ---
+# "tokenUrl" aponta para o endpoint que o frontend usará para obter o token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+# --- Funções de Dependência para Usuário Atual ---
+async def get_current_user(
+    db: Session = Depends(get_db), 
+    token: str = Depends(oauth2_scheme)
+) -> models.User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Não foi possível validar as credenciais",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: Optional[str] = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    
+    user = crud.get_user_by_nome(db, nome=token_data.username)
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_current_active_user(
+    current_user: models.User = Depends(get_current_user)
+) -> models.User:
+    # Você poderia adicionar uma verificação aqui se o usuário está ativo (ex: if current_user.disabled:)
+    # Por enquanto, apenas retornamos o usuário.
+    # if current_user.disabled:
+    #     raise HTTPException(status_code=400, detail="Usuário inativo")
+    return current_user
 
 # --- Templates and Static Files ---
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -70,76 +131,89 @@ async def register_user_endpoint(
 ):
     db_user = crud.get_user_by_nome(db, nome=nome)
     if db_user:
-        # Se uma imagem foi enviada e o usuário já existe, remova o arquivo temporário se houver.
-        if imagem_file: await imagem_file.close() # Fecha o arquivo caso não seja usado.
+        if imagem_file: await imagem_file.close()
         raise HTTPException(status_code=400, detail="Nome de usuário já registrado")
 
     imagem_url_para_armazenar = None
     if imagem_file:
         if not imagem_file.content_type or not imagem_file.content_type.startswith("image/"):
-            await imagem_file.close()
-            raise HTTPException(status_code=400, detail="Tipo de arquivo inválido. Apenas imagens são permitidas.")
-        
+            await imagem_file.close(); raise HTTPException(status_code=400, detail="Tipo de arquivo inválido.")
         file_extension = Path(imagem_file.filename).suffix.lower()
         if file_extension not in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-            await imagem_file.close()
-            raise HTTPException(status_code=400, detail=f"Extensão de arquivo '{file_extension}' não permitida. Use jpg, jpeg, png, gif, ou webp.")
-
+            await imagem_file.close(); raise HTTPException(status_code=400, detail=f"Extensão '{file_extension}' não permitida.")
+        
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_location = USER_IMAGE_DIR / unique_filename
-        
         try:
-            with open(file_location, "wb+") as file_object:
-                shutil.copyfileobj(imagem_file.file, file_object)
+            with open(file_location, "wb+") as file_object: shutil.copyfileobj(imagem_file.file, file_object)
             imagem_url_para_armazenar = f"/static/user_images/{unique_filename}"
-        except Exception as e:
+        except Exception as e_img:
             if file_location.exists(): 
                 try: os.remove(file_location)
                 except OSError: pass
-            raise HTTPException(status_code=500, detail=f"Erro ao salvar imagem: {str(e)}")
-        finally:
-            await imagem_file.close()
+            print(f"Erro ao salvar imagem: {e_img}") # Log do erro
+            raise HTTPException(status_code=500, detail="Erro ao salvar imagem.")
+        finally: 
+            if imagem_file and not imagem_file.file.closed: # Garante que só fecha se não estiver fechado
+                await imagem_file.close()
             
     user_input_schema = schemas.UserCreateInput(nome=nome, senha=senha, imagem=imagem_url_para_armazenar)
     try:
         return crud.create_user(db=db, user_input=user_input_schema)
-    except ValueError as e: # Tratamento de erro duplicado do CRUD, caso get_user_by_nome falhe por condição de corrida
+    except ValueError as e: 
         if imagem_url_para_armazenar and (USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name).exists():
              try: os.remove(USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name)
              except OSError: pass
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception as e_gen:
         if imagem_url_para_armazenar and (USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name).exists():
             try: os.remove(USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name)
             except OSError: pass
-        raise HTTPException(status_code=500, detail=f"Erro interno no servidor durante cadastro: {str(e)}")
+        print(f"Erro geral no cadastro: {e_gen}") # Log do erro
+        raise HTTPException(status_code=500, detail=f"Erro interno no servidor durante cadastro.")
+
+# ENDPOINT DE LOGIN ATUALIZADO PARA GERAR TOKEN
+@app.post("/api/v1/token", tags=["User Management"]) 
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    db: Session = Depends(get_db)
+):
+    user = crud.get_user_by_nome(db, nome=form_data.username)
+    if not user or not verify_password(form_data.password, user.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Nome de usuário ou senha incorretos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # ACCESS_TOKEN_EXPIRE_MINUTES é importado de security.py
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.nome}, expires_delta=access_token_expires
+    )
+    # Retorna o token e também user_info para o frontend usar (ex: mostrar nome, imagem)
+    # schemas.UserOutput.model_validate(user) é para Pydantic V2
+    # Para Pydantic V1, seria schemas.UserOutput.from_orm(user)
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "user_info": schemas.UserOutput.model_validate(user) 
+    }
+
+# Endpoint de exemplo para obter dados do usuário logado
+@app.get("/api/v1/users/me", response_model=schemas.UserOutput, tags=["User Management"])
+async def read_users_me(current_user: models.User = Depends(get_current_active_user)):
+    return current_user
 
 
-@app.post("/api/v1/login", response_model=schemas.UserOutput, tags=["User Management"])
-async def login_user_endpoint(user_credentials: schemas.UserLoginInput, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_nome(db, nome=user_credentials.nome)
-    if not db_user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    
-    senha_hash_calculada = hashlib.sha256(user_credentials.senha.encode()).hexdigest()
-    if db_user.senha_hash != senha_hash_calculada:
-        raise HTTPException(status_code=400, detail="Senha incorreta")
-    
-    return db_user
-
-
-@app.post("/api/v1/comments", status_code=201, tags=["Comments"])
+@app.post("/api/v1/comments", response_model=schemas.ComentarioOutput, status_code=201, tags=["Comments"])
 async def submit_comment_endpoint(
     db: Session = Depends(get_db),
-    nome_autor: str = Form(...), 
-    # imagem_autor: Optional[str] = Form(None), # A imagem será pega do usuário no DB
-    texto_comentario: str = Form(..., alias="texto")
+    texto_comentario: str = Form(..., alias="texto"),
+    current_user: models.User = Depends(get_current_active_user) # Obtém o usuário do token
 ):
-    autor_user = crud.get_user_by_nome(db, nome=nome_autor)
-    if not autor_user:
-        raise HTTPException(status_code=401, detail="Usuário autor não encontrado. Faça login ou cadastre-se.")
+    autor_user = current_user 
     
-    print(f"DEBUG: Recebido novo comentário de {autor_user.nome}: '{texto_comentario}' Imagem do usuário (do DB): {autor_user.imagem}")
+    print(f"DEBUG: Novo comentário de '{autor_user.nome}': '{texto_comentario}' | Imagem do usuário: {autor_user.imagem}")
 
     is_toxic = analisar_comentario(texto_comentario)
     aprovado_status = not is_toxic
@@ -148,25 +222,27 @@ async def submit_comment_endpoint(
     
     comentario_input_schema = schemas.ComentarioCreateInput(texto=texto_comentario)
     
-    comentario_salvo = crud.create_comment(
+    comentario_salvo_db = crud.create_comment(
         db=db, 
         comentario_input=comentario_input_schema, 
-        autor_user=autor_user, # Passa o objeto User completo
+        autor_user=autor_user, 
         aprovado_status=aprovado_status
     )
     
-    return {"message": "Comentário recebido.", "aprovado": comentario_salvo.aprovado, "comment_id": comentario_salvo.id}
+    # Retorna um schema Pydantic ComentarioOutput, que será automaticamente convertido de comentario_salvo_db
+    # (se orm_mode/from_attributes=True estiver no schema Pydantic)
+    return comentario_salvo_db
 
 
 @app.get("/api/v1/comments", response_model=List[schemas.ComentarioOutput], tags=["Comments"])
 async def get_approved_comments_endpoint(db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
-    aprovados = crud.get_approved_comments(db, skip=skip, limit=limit)
-    print(f"DEBUG: Enviando {len(aprovados)} comentários aprovados para o frontend: {aprovados}")
-    return aprovados
+    aprovados_db = crud.get_approved_comments(db, skip=skip, limit=limit)
+    print(f"DEBUG: Enviando {len(aprovados_db)} comentários aprovados para o frontend.")
+    return aprovados_db
 
 
 @app.get("/api/v1/comments/all", response_model=List[schemas.ComentarioOutput], tags=["Comments (Admin)"])
 async def get_all_comments_admin_endpoint(db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
-    todos = crud.get_all_comments(db, skip=skip, limit=limit)
-    print(f"DEBUG: Endpoint /all - Total de comentários no sistema: {len(todos)}")
-    return todos
+    todos_db = crud.get_all_comments(db, skip=skip, limit=limit)
+    print(f"DEBUG: Endpoint /all - Total de comentários no sistema: {len(todos_db)}")
+    return todos_db

@@ -25,8 +25,10 @@
 
     <script>
         async function handleLogin() {
-            const nome = document.getElementById('nome').value;
-            const senha = document.getElementById('senha').value;
+            const nomeInput = document.getElementById('nome');
+            const senhaInput = document.getElementById('senha');
+            const nome = nomeInput.value;
+            const senha = senhaInput.value;
             const errorMessageElement = document.getElementById('error-message');
             errorMessageElement.textContent = '';
 
@@ -35,21 +37,40 @@
                 return;
             }
 
+            // OAuth2PasswordRequestForm (usado pelo endpoint /token) espera dados como x-www-form-urlencoded
+            const formData = new FormData();
+            formData.append('username', nome); // O FastAPI espera 'username' e 'password' para OAuth2PasswordRequestForm
+            formData.append('password', senha);
+
             try {
-                const response = await fetch("{{ url_for('login_user_endpoint') }}", { // API endpoint
+                const response = await fetch("{{ url_for('login_for_access_token') }}", { // Endpoint /api/v1/token
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nome, senha })
+                    // Não defina Content-Type ao enviar FormData com URLSearchParams, 
+                    // o navegador define 'application/x-www-form-urlencoded'
+                    body: new URLSearchParams(formData) 
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Falha no login.');
+                    let errorDetail = 'Falha no login. Verifique suas credenciais.';
+                    try {
+                        const errorData = await response.json();
+                        errorDetail = errorData.detail || errorDetail;
+                    } catch (e) {
+                        // Se não conseguir parsear JSON, usa a mensagem padrão
+                    }
+                    throw new Error(errorDetail);
                 }
 
-                const userData = await response.json();
-                localStorage.setItem('comentarioUser', JSON.stringify(userData));
-                window.location.href = "{{ url_for('read_index') }}"; // Redireciona para a página principal
+                const tokenData = await response.json();
+                // tokenData deve conter: {"access_token": "...", "token_type": "bearer", "user_info": {...}}
+                
+                if (tokenData.access_token && tokenData.user_info) {
+                    localStorage.setItem('accessToken', tokenData.access_token);
+                    localStorage.setItem('comentarioUser', JSON.stringify(tokenData.user_info)); // Armazena user_info
+                    window.location.href = "{{ url_for('read_index') }}"; // Redireciona para a página principal
+                } else {
+                    throw new Error('Resposta de login inválida do servidor.');
+                }
 
             } catch (error) {
                 errorMessageElement.textContent = error.message;
