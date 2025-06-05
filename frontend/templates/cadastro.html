@@ -6,32 +6,37 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
 </head>
 <body>
-    <div class="container auth-container">
-        <h1>Cadastrar</h1>
-        <div id="register-form-fields">
-            <input type="text" id="nome" placeholder="Nome de usuário" required>
-            <input type="password" id="senha" placeholder="Senha" required>
-            
-            <label for="imagem-upload" class="file-upload-label">
-                Foto de Perfil (Opcional):
-            </label>
-            <input type="file" id="imagem-upload" name="imagem" accept="image/*">
-            <p class="input-hint">Se não enviar uma foto, uma imagem padrão será usada.</p>
-            
-            <button onclick="handleRegister()">Cadastrar</button>
-            <p id="success-message" class="success-text"></p>
-            <p id="error-message" class="error-text"></p>
+    <div class="logo-top">
+        <img src="{{ url_for('static', path='/logoJC.svg') }}" alt="Logo Jornal do Commercio" class="logo">
+    </div>
+
+    <div class="container-horizontal">
+        <div class="auth-container"> <h1>Cadastrar</h1>
+            <div id="register-form-fields">
+                <input type="text" id="nome" placeholder="Nome de usuário" required>
+                <input type="password" id="senha" placeholder="Senha" required>
+
+                <label for="imagem-upload" class="file-upload-label">
+                    Foto de Perfil (Opcional):
+                </label>
+                <input type="file" id="imagem-upload" name="imagem" accept="image/*">
+                <p class="input-hint">Se não enviar uma foto, nenhuma imagem de perfil será usada.</p>
+
+                <button onclick="handleRegister()">Cadastrar</button>
+                <p id="success-message" class="success-text"></p>
+                <p id="error-message" class="error-text"></p>
+            </div>
+            <p>Já tem uma conta? <a href="{{ url_for('read_login_page') }}">Faça login aqui</a></p>
+            <p><a href="{{ url_for('read_index') }}">Voltar para comentários</a></p>
         </div>
-        <p>Já tem uma conta? <a href="/loginpage">Faça login aqui</a></p>
-        <p><a href="/">Voltar para comentários</a></p>
     </div>
 
     <script>
         async function handleRegister() {
             const nome = document.getElementById('nome').value;
             const senha = document.getElementById('senha').value;
-            const imagemInput = document.getElementById('imagem-upload'); // ID atualizado
-            const imagemFile = imagemInput.files[0]; // Pega o arquivo
+            const imagemInput = document.getElementById('imagem-upload');
+            const imagemFile = imagemInput.files[0];
 
             const successMessageElement = document.getElementById('success-message');
             const errorMessageElement = document.getElementById('error-message');
@@ -48,20 +53,17 @@
             formData.append('nome', nome);
             formData.append('senha', senha);
             if (imagemFile) {
-                // Validar tipo de arquivo no frontend (básico)
                 if (!imagemFile.type.startsWith('image/')) {
                     errorMessageElement.textContent = 'Por favor, selecione um arquivo de imagem válido.';
                     return;
                 }
-                formData.append('imagem', imagemFile); // O backend espera 'imagem' como alias
+                formData.append('imagem', imagemFile); // Backend espera 'imagem' como alias para imagem_file
             }
 
             try {
-                // Ao usar FormData, não defina o header 'Content-Type'.
-                // O navegador o fará automaticamente com o 'boundary' correto.
-                const response = await fetch('/api/v1/register', {
+                const response = await fetch("{{ url_for('register_user_endpoint') }}", { // API endpoint
                     method: 'POST',
-                    body: formData 
+                    body: formData
                 });
 
                 if (!response.ok) {
@@ -70,10 +72,9 @@
                 }
 
                 successMessageElement.textContent = 'Cadastro realizado com sucesso! Você pode fazer login agora.';
-                document.getElementById('nome').value = ''; // Limpar campos
+                document.getElementById('nome').value = '';
                 document.getElementById('senha').value = '';
-                imagemInput.value = null; // Limpar input de arquivo
-
+                imagemInput.value = null; // Limpa o input de arquivo
             } catch (error) {
                 errorMessageElement.textContent = error.message;
                 console.error('Erro no cadastro:', error);

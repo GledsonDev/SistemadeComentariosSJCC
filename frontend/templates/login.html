@@ -3,19 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <title>Login - Sistema de Comentários</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='/styleLogin.css') }}">
 </head>
 <body>
-    <div class="container auth-container">
-        <h1>Entrar</h1>
-        <div id="login-form">
+    <div class="main-container"> 
+        <header class="page-header">
+            <img src="{{ url_for('static', path='/logoJC.svg') }}" alt="Logo Jornal do Commercio" class="logo-jc">
+            <h1>Acesso ao Sistema</h1>
+        </header>
+
+        <div class="auth-form">
             <input type="text" id="nome" placeholder="Nome de usuário" required>
             <input type="password" id="senha" placeholder="Senha" required>
-            <button onclick="handleLogin()">Entrar</button>
+            <button onclick="handleLogin()" class="submit-button">Entrar</button>
             <p id="error-message" class="error-text"></p>
+
+            <p class="form-footer">Não tem uma conta? <a href="{{ url_for('read_register_page') }}">Cadastre-se aqui</a></p>
+            <p class="form-footer"><a href="{{ url_for('read_index') }}">← Voltar para os comentários</a></p>
         </div>
-        <p>Não tem uma conta? <a href="/registerpage">Cadastre-se aqui</a></p>
-        <p><a href="/">Voltar para comentários</a></p>
     </div>
 
     <script>
@@ -31,7 +36,7 @@
             }
 
             try {
-                const response = await fetch('/api/v1/login', {
+                const response = await fetch("{{ url_for('login_user_endpoint') }}", { // API endpoint
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ nome, senha })
@@ -43,8 +48,8 @@
                 }
 
                 const userData = await response.json();
-                localStorage.setItem('comentarioUser', JSON.stringify(userData)); // Store user info
-                window.location.href = '/'; // Redirect to main comments page
+                localStorage.setItem('comentarioUser', JSON.stringify(userData));
+                window.location.href = "{{ url_for('read_index') }}"; // Redireciona para a página principal
 
             } catch (error) {
                 errorMessageElement.textContent = error.message;
