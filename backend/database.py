@@ -17,9 +17,6 @@ DB_NAME = os.getenv("DB_NAME")
 # Validação para garantir que as variáveis foram carregadas
 if not all([DB_USER_RAW, DB_PASSWORD_RAW, DB_NAME]):
     print("ERRO: Variáveis de banco de dados (DB_USER_RAW, DB_PASSWORD_RAW, DB_NAME) não configuradas no .env ou ambiente.")
-    # Você pode querer levantar uma exceção aqui para parar a execução se forem críticas
-    # raise EnvironmentError("Variáveis de banco de dados não configuradas.")
-    # Por enquanto, vamos permitir que continue para ver se o engine falha (o que vai acontecer)
 
 DB_USER_ENCODED = quote_plus(DB_USER_RAW) if DB_USER_RAW else ''
 DB_PASSWORD_ENCODED = quote_plus(DB_PASSWORD_RAW) if DB_PASSWORD_RAW else ''

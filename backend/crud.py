@@ -1,9 +1,7 @@
-# backend/crud.py
 from sqlalchemy.orm import Session
-# Removido: import hashlib (não mais usado diretamente aqui)
 from typing import Optional, List 
 from . import models, schemas
-from .security import get_password_hash # Importar a nova função de hash
+from .security import get_password_hash
 
 # --- Funções CRUD para Usuários ---
 def get_user_by_id(db: Session, user_id: int) -> Optional[models.User]:
@@ -13,11 +11,10 @@ def get_user_by_nome(db: Session, nome: str) -> Optional[models.User]:
     return db.query(models.User).filter(models.User.nome == nome).first()
 
 def create_user(db: Session, user_input: schemas.UserCreateInput) -> models.User:
-    # Usar a nova função de hash de security.py
     hashed_password = get_password_hash(user_input.senha)
     db_user = models.User(
         nome=user_input.nome,
-        senha_hash=hashed_password, # Salvar o hash gerado pelo passlib
+        senha_hash=hashed_password,
         imagem=user_input.imagem
     )
     db.add(db_user)
@@ -25,7 +22,6 @@ def create_user(db: Session, user_input: schemas.UserCreateInput) -> models.User
     db.refresh(db_user)
     return db_user
 
-# ... (resto das funções CRUD de Comentário permanecem iguais) ...
 def create_comment(db: Session, comentario_input: schemas.ComentarioCreateInput, autor_user: models.User, aprovado_status: bool) -> models.Comentario:
     db_comentario = models.Comentario(
         texto=comentario_input.texto,

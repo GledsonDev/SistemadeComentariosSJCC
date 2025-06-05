@@ -1,5 +1,5 @@
 from fastapi import (
-    FastAPI, HTTPException, Depends, File, 
+    FastAPI, HTTPException, Depends, File,
     UploadFile, Form, Request, status
 )
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,8 +30,7 @@ from .security import (
     verify_password,
     ALGORITHM,
     SECRET_KEY,
-    # pwd_context não é usado diretamente em main.py, mas em crud.py via security.py
-    ACCESS_TOKEN_EXPIRE_MINUTES # Importado para uso em login_for_access_token
+    ACCESS_TOKEN_EXPIRE_MINUTES
 )
 
 # Cria tabelas no DB (se não existirem)
@@ -40,27 +39,26 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Sistema de Comentários SJCC",
     description="API para gerenciar usuários e comentários com moderação por IA.",
-    version="2.1.1" # Pequena atualização de versão
+    version="2.1.2" # Atualização de versão
 )
 
 # --- CORS Middleware ---
 # Ajuste 'origins' para seus domínios de frontend em produção
 origins = [
-    "http://localhost:8000",
+    "http://localhost:8000", # Necessário se o frontend for servido pela mesma origem/porta
     "http://127.0.0.1:8000",
-    # "https://seufrontend.com", 
+    # Exemplo: "https://www.seufrontend.com",
 ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Permite todos os métodos (GET, POST, etc.)
-    allow_headers=["*"], # Permite todos os headers (incluindo Authorization)
+    allow_methods=["*"], 
+    allow_headers=["*"], 
 )
 
 # --- OAuth2 e Token Data Schema ---
-# "tokenUrl" aponta para o endpoint que o frontend usará para obter o token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token") # Endpoint para obter o token
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -92,10 +90,6 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: models.User = Depends(get_current_user)
 ) -> models.User:
-    # Você poderia adicionar uma verificação aqui se o usuário está ativo (ex: if current_user.disabled:)
-    # Por enquanto, apenas retornamos o usuário.
-    # if current_user.disabled:
-    #     raise HTTPException(status_code=400, detail="Usuário inativo")
     return current_user
 
 # --- Templates and Static Files ---
@@ -131,7 +125,7 @@ async def register_user_endpoint(
 ):
     db_user = crud.get_user_by_nome(db, nome=nome)
     if db_user:
-        if imagem_file: await imagem_file.close()
+        if imagem_file: await imagem_file.close() # Fecha o arquivo se não for usado
         raise HTTPException(status_code=400, detail="Nome de usuário já registrado")
 
     imagem_url_para_armazenar = None
@@ -150,29 +144,28 @@ async def register_user_endpoint(
         except Exception as e_img:
             if file_location.exists(): 
                 try: os.remove(file_location)
-                except OSError: pass
-            print(f"Erro ao salvar imagem: {e_img}") # Log do erro
+                except OSError: pass # Ignora erro na remoção se o arquivo já não existir
+            print(f"Erro ao salvar imagem: {e_img}")
             raise HTTPException(status_code=500, detail="Erro ao salvar imagem.")
         finally: 
-            if imagem_file and not imagem_file.file.closed: # Garante que só fecha se não estiver fechado
+            if imagem_file and hasattr(imagem_file, 'file') and imagem_file.file and not imagem_file.file.closed:
                 await imagem_file.close()
             
     user_input_schema = schemas.UserCreateInput(nome=nome, senha=senha, imagem=imagem_url_para_armazenar)
     try:
         return crud.create_user(db=db, user_input=user_input_schema)
-    except ValueError as e: 
+    except ValueError as e: # Ex: Usuário já existe (redundante se get_user_by_nome já verificou, mas bom como fallback)
         if imagem_url_para_armazenar and (USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name).exists():
              try: os.remove(USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name)
              except OSError: pass
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e_gen:
+    except Exception as e_gen: # Outros erros
         if imagem_url_para_armazenar and (USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name).exists():
             try: os.remove(USER_IMAGE_DIR / Path(imagem_url_para_armazenar).name)
             except OSError: pass
-        print(f"Erro geral no cadastro: {e_gen}") # Log do erro
+        print(f"Erro geral no cadastro: {e_gen}")
         raise HTTPException(status_code=500, detail=f"Erro interno no servidor durante cadastro.")
 
-# ENDPOINT DE LOGIN ATUALIZADO PARA GERAR TOKEN
 @app.post("/api/v1/token", tags=["User Management"]) 
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
@@ -185,40 +178,42 @@ async def login_for_access_token(
             detail="Nome de usuário ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # ACCESS_TOKEN_EXPIRE_MINUTES é importado de security.py
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.nome}, expires_delta=access_token_expires
     )
-    # Retorna o token e também user_info para o frontend usar (ex: mostrar nome, imagem)
-    # schemas.UserOutput.model_validate(user) é para Pydantic V2
-    # Para Pydantic V1, seria schemas.UserOutput.from_orm(user)
+    # Para Pydantic V2: schemas.UserOutput.model_validate(user)
+    # Para Pydantic V1: schemas.UserOutput.from_orm(user)
+    user_output = schemas.UserOutput.model_validate(user) if hasattr(schemas.UserOutput, 'model_validate') else schemas.UserOutput.from_orm(user)
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "user_info": schemas.UserOutput.model_validate(user) 
+        "user_info": user_output
     }
 
-# Endpoint de exemplo para obter dados do usuário logado
 @app.get("/api/v1/users/me", response_model=schemas.UserOutput, tags=["User Management"])
 async def read_users_me(current_user: models.User = Depends(get_current_active_user)):
+    """
+    Retorna as informações do usuário atualmente autenticado.
+    Útil para o frontend verificar quem está logado e obter dados do perfil.
+    """
     return current_user
 
 
-@app.post("/api/v1/comments", response_model=schemas.ComentarioOutput, status_code=201, tags=["Comments"])
+@app.post("/api/v1/comments", response_model=schemas.ComentarioOutput, status_code=status.HTTP_201_CREATED, tags=["Comments"])
 async def submit_comment_endpoint(
     db: Session = Depends(get_db),
-    texto_comentario: str = Form(..., alias="texto"),
-    current_user: models.User = Depends(get_current_active_user) # Obtém o usuário do token
+    texto_comentario: str = Form(..., alias="texto"), # 'alias' é opcional se o nome do campo no FormData for 'texto_comentario'
+    current_user: models.User = Depends(get_current_active_user)
 ):
     autor_user = current_user 
     
     print(f"DEBUG: Novo comentário de '{autor_user.nome}': '{texto_comentario}' | Imagem do usuário: {autor_user.imagem}")
 
-    is_toxic = analisar_comentario(texto_comentario)
-    aprovado_status = not is_toxic
+    is_toxic = analisar_comentario(texto_comentario) # True se tóxico, False se não tóxico
+    aprovado_status = not is_toxic # aprovado_status é True se NÃO tóxico
     
-    print(f"DEBUG: Comentário '{texto_comentario}' é (considerado) tóxico? {is_toxic}. Aprovado: {aprovado_status}")
+    print(f"DEBUG: Comentário '{texto_comentario}' é (considerado) tóxico pela IA? {is_toxic}. Status de Aprovação: {aprovado_status}")
     
     comentario_input_schema = schemas.ComentarioCreateInput(texto=texto_comentario)
     
@@ -228,9 +223,6 @@ async def submit_comment_endpoint(
         autor_user=autor_user, 
         aprovado_status=aprovado_status
     )
-    
-    # Retorna um schema Pydantic ComentarioOutput, que será automaticamente convertido de comentario_salvo_db
-    # (se orm_mode/from_attributes=True estiver no schema Pydantic)
     return comentario_salvo_db
 
 
